@@ -1,0 +1,7 @@
+.next
+node_modules
+coverage
+package-lock.json
+public/sw.js
+supabase/.temp
+src/components/ui
