@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
+import { isIos, isStandalone } from "@/lib/platform";
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -13,19 +15,6 @@ function subscribeDisplayMode(onChange: () => void) {
   const query = window.matchMedia("(display-mode: standalone)");
   query.addEventListener("change", onChange);
   return () => query.removeEventListener("change", onChange);
-}
-
-function isStandalone() {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
-function isIos() {
-  const { userAgent, maxTouchPoints } = navigator;
-  // iPadOS reports a desktop Mac user agent but has touch.
-  return /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
 }
 
 /**

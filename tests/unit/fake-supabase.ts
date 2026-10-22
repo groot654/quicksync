@@ -41,6 +41,7 @@ export function createFakeSupabase(results: QueryResult[]) {
       "order",
       "limit",
       "in",
+      "neq",
     ]) {
       builder[method] = (...args: unknown[]) => {
         query.calls.push([method, ...args]);
@@ -63,7 +64,14 @@ export function createFakeSupabase(results: QueryResult[]) {
     return builder;
   });
 
-  return { client: { from } as never, from, queries };
+  /** `supabase.rpc(name, args)` resolves to the next queued result too. */
+  const rpc = vi.fn((name: string, args?: unknown) => {
+    queries.push({ table: `rpc:${name}`, calls: [["rpc", args]] });
+    const next = queue.shift() ?? { data: null, error: null };
+    return Promise.resolve({ data: null, error: null, ...next });
+  });
+
+  return { client: { from, rpc } as never, from, rpc, queries };
 }
 
 export function callsOf(query: RecordedQuery, method: string) {

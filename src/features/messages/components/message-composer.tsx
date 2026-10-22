@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { getCurrentPushEndpoint } from "@/features/notifications/client";
 import { createId } from "@/lib/id";
 import { cn } from "@/lib/utils";
 
@@ -35,9 +36,16 @@ type MessageComposerProps = {
   online: boolean;
   onSent: (message: Message) => void;
   onUnauthorized: () => void;
+  /** Called with the idempotency key just before a message is sent from this device. */
+  onSending?: (clientId: string) => void;
 };
 
-export function MessageComposer({ online, onSent, onUnauthorized }: MessageComposerProps) {
+export function MessageComposer({
+  online,
+  onSent,
+  onUnauthorized,
+  onSending,
+}: MessageComposerProps) {
   // The draft lives only in component memory: never in localStorage or sessionStorage.
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -87,10 +95,18 @@ export function MessageComposer({ online, onSent, onUnauthorized }: MessageCompo
     sendingRef.current = true;
     setIsSending(true);
     clientIdRef.current ??= createId();
+    const clientId = clientIdRef.current;
     const content = parsed.data;
+    onSending?.(clientId);
 
     try {
-      const result = await createMessage({ clientId: clientIdRef.current, content });
+      // Lets the server skip notifying this device about its own message.
+      const sourceEndpoint = await getCurrentPushEndpoint().catch(() => undefined);
+      const result = await createMessage({
+        clientId,
+        content,
+        ...(sourceEndpoint && { sourceEndpoint }),
+      });
 
       if (result.ok) {
         onSent(result.data);

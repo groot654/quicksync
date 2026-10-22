@@ -1,5 +1,7 @@
 "use server";
 
+import { after } from "next/server";
+
 import {
   fail,
   logServerError,
@@ -8,6 +10,7 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { getAuthContext } from "@/features/auth/dal";
+import { notifyNewMessage } from "@/features/notifications/send";
 
 import { MESSAGE_COLUMNS } from "./constants";
 import { createMessageSchema, deleteMessageSchema } from "./schemas";
@@ -30,7 +33,7 @@ export async function createMessage(input: unknown): Promise<ActionResult<Messag
   if (!parsed.success) return fail("VALIDATION", parsed.error.issues[0].message);
 
   const { supabase, user } = auth;
-  const { clientId, content } = parsed.data;
+  const { clientId, content, sourceEndpoint } = parsed.data;
 
   const { data, error } = await supabase
     .from("messages")
@@ -40,8 +43,13 @@ export async function createMessage(input: unknown): Promise<ActionResult<Messag
     .select(MESSAGE_COLUMNS)
     .single();
 
-  if (!error) return ok(data);
+  if (!error) {
+    // Notify the user's other devices once the response has been sent.
+    after(() => notifyNewMessage({ supabase, userId: user.id, message: data, sourceEndpoint }));
+    return ok(data);
+  }
 
+  // A retry of a message that was already stored: its notification went out the first time.
   if (error.code === UNIQUE_VIOLATION) {
     const existing = await supabase
       .from("messages")

@@ -35,6 +35,10 @@ const roundedSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512
 const squareSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${gradient}
   <rect width="512" height="512" fill="url(#bg)"/>${glyph}</svg>`;
 
+// Notification badge: Android draws it from the alpha channel only, so it is the white
+// glyph on transparency, cropped close so it reads at status-bar size.
+const badgeSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="96 96 320 320">${glyph}</svg>`;
+
 function splashSvg(width, height) {
   const tile = Math.round(Math.min(width, height) * 0.28);
   const x = Math.round((width - tile) / 2);
@@ -97,6 +101,7 @@ async function main() {
     "icon-512.png": await png(roundedSvg, 512),
     "icon-maskable-512.png": await png(squareSvg, 512),
     "apple-touch-icon.png": await png(squareSvg, 180),
+    "badge-96.png": await png(badgeSvg, 96),
   };
 
   for (const [width, height, ratio] of SPLASH_SCREENS) {

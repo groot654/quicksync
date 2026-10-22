@@ -54,6 +54,28 @@ export function getAllowedEmails(): ReadonlySet<string> | null {
   return emails.length > 0 ? new Set(emails) : null;
 }
 
+/**
+ * Public VAPID key used by browsers to subscribe to Web Push. Returns `null` when push
+ * notifications are not configured, in which case the app simply doesn't offer them.
+ */
+export function getVapidPublicKey(): string | null {
+  return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() || null;
+}
+
+export type PushConfig = { publicKey: string; privateKey: string; subject: string };
+
+/**
+ * Server-only Web Push settings. Returns `null` unless all three values are set, so a
+ * deployment without them keeps working, just without notifications.
+ */
+export function getPushConfig(): PushConfig | null {
+  const publicKey = getVapidPublicKey();
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  const subject = process.env.VAPID_SUBJECT?.trim();
+  if (!publicKey || !privateKey || !subject) return null;
+  return { publicKey, privateKey, subject };
+}
+
 export function isEmailAllowed(email: string | null | undefined): boolean {
   const allowed = getAllowedEmails();
   if (!allowed) return true;

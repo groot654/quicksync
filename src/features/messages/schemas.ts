@@ -24,6 +24,8 @@ export const messageContentSchema = z
 export const createMessageSchema = z.object({
   clientId: z.uuid({ error: "Invalid request." }),
   content: messageContentSchema,
+  /** The sending device's push endpoint, so it isn't notified about its own message. */
+  sourceEndpoint: z.string().max(2048).optional().catch(undefined),
 });
 
 export const deleteMessageSchema = z.object({

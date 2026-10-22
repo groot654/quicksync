@@ -7,6 +7,10 @@
  *
  * It never caches HTML pages, Server Action responses, API routes or anything from
  * Supabase, so message contents and session data never land in Cache Storage.
+ *
+ * It also shows Web Push notifications for messages sent from the user's other devices.
+ * One-time codes get "Copy code" and "Copy message" actions. A service worker can't
+ * write to the clipboard, so an action opens (or focuses) QuickSync, which copies.
  */
 
 const VERSION = "v1";
@@ -84,3 +88,103 @@ async function trimCache(cache) {
   const excess = keys.length - MAX_STATIC_ENTRIES;
   for (let i = 0; i < excess; i++) await cache.delete(keys[i]);
 }
+
+// --- Push notifications ------------------------------------------------------------
+
+/** Posted to open QuickSync windows; keep in sync with src/features/notifications/notification-intent.ts. */
+const NOTIFICATION_MESSAGE_TYPE = "quicksync:notification";
+const NOTIFICATION_ACTIONS = new Set(["copy-code", "copy", "open"]);
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(handlePush(event.data));
+});
+
+async function handlePush(data) {
+  let payload = null;
+  try {
+    payload = data ? data.json() : null;
+  } catch {
+    // Not JSON: fall through to a generic notification.
+  }
+
+  // While QuickSync is open and focused the message appears live, so stay quiet.
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  if (windows.some((client) => client.focused)) return;
+
+  if (!payload || payload.type !== "message" || typeof payload.id !== "string") {
+    // Browsers require every push to show something.
+    await self.registration.showNotification("QuickSync", {
+      body: "You have a new message.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/badge-96.png",
+      tag: "quicksync-message",
+    });
+    return;
+  }
+
+  const code = typeof payload.code === "string" && payload.code ? payload.code : null;
+  await self.registration.showNotification(payload.title || "New message", {
+    body: payload.body || "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/badge-96.png",
+    // One notification per message; a repeated delivery replaces instead of stacking.
+    tag: `message-${payload.id}`,
+    timestamp: Date.parse(payload.createdAt) || Date.now(),
+    data: { id: payload.id, code },
+    actions: code
+      ? [
+          { action: "copy-code", title: "Copy code" },
+          { action: "copy", title: "Copy message" },
+        ]
+      : [{ action: "copy", title: "Copy" }],
+  });
+}
+
+self.addEventListener("notificationclick", (event) => {
+  const { notification } = event;
+  notification.close();
+
+  const data = notification.data || {};
+  const messageId = typeof data.id === "string" ? data.id : null;
+  // Tapping the notification itself (the only option on iOS) uses "open"; the app then
+  // decides whether to copy the code, based on the device's auto-copy setting.
+  const action = NOTIFICATION_ACTIONS.has(event.action) ? event.action : "open";
+
+  event.waitUntil(openApp({ action, messageId }));
+});
+
+async function openApp(intent) {
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  // Only the messages page handles intents (not, for example, the sign-in page).
+  const existing = windows.find((client) => new URL(client.url).pathname === "/");
+
+  if (existing) {
+    try {
+      await existing.focus();
+    } catch {
+      // Focus can be refused; the message below still reaches the page.
+    }
+    existing.postMessage({ type: NOTIFICATION_MESSAGE_TYPE, ...intent });
+    return;
+  }
+
+  // Only the message id goes in the URL, never its content.
+  const url = new URL("/", self.location.origin);
+  if (intent.messageId) {
+    url.searchParams.set("notification", intent.action);
+    url.searchParams.set("message", intent.messageId);
+  }
+  await self.clients.openWindow(url.href);
+}
+
+// The browser rotated or expired the subscription. Re-subscribe with the same key; the
+// app registers the new endpoint with the server the next time it opens.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  const options = event.oldSubscription && event.oldSubscription.options;
+  if (!options || !options.applicationServerKey) return;
+  event.waitUntil(
+    self.registration.pushManager
+      .subscribe({ userVisibleOnly: true, applicationServerKey: options.applicationServerKey })
+      .catch(() => {}),
+  );
+});

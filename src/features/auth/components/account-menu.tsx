@@ -13,9 +13,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NotificationMenuItems } from "@/features/notifications/components/notification-menu-items";
+import { unsubscribeThisDevice } from "@/features/notifications/push-store";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
 
 import { signOut } from "../actions";
+
+const goToLogin = () => window.location.replace("/login");
 
 export function AccountMenu({ email }: { email: string | null }) {
   const [isSigningOut, startSignOut] = useTransition();
@@ -24,6 +28,8 @@ export function AccountMenu({ email }: { email: string | null }) {
   const handleSignOut = () => {
     startSignOut(async () => {
       try {
+        // While still signed in: stop this browser receiving this account's notifications.
+        await unsubscribeThisDevice();
         await signOut();
       } finally {
         // A full navigation drops every message held in memory; `replace` keeps the
@@ -62,6 +68,8 @@ export function AccountMenu({ email }: { email: string | null }) {
           <span className="text-xs font-normal text-muted-foreground">Signed in as</span>
           <span className="truncate text-sm font-medium">{email ?? "Unknown account"}</span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <NotificationMenuItems onUnauthorized={goToLogin} />
         <DropdownMenuSeparator />
         {(mode === "prompt" || mode === "ios-instructions") && (
           <DropdownMenuItem className="min-h-10" onSelect={() => void handleInstall()}>

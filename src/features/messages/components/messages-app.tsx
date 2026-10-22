@@ -9,6 +9,9 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/features/auth/components/account-menu";
+import { NotificationPrompt } from "@/features/notifications/components/notification-prompt";
+import { useCodeAutoCopy } from "@/features/notifications/hooks/use-code-auto-copy";
+import { useNotificationIntents } from "@/features/notifications/hooks/use-notification-intents";
 import { useNow } from "@/hooks/use-now";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { createClient } from "@/lib/supabase/client";
@@ -45,13 +48,19 @@ export function MessagesApp({ user, initialPage, initialLoadFailed }: MessagesAp
     window.location.replace("/login");
   }, []);
 
+  const autoCopy = useCodeAutoCopy();
+
   const sync = useMessageSync({
     getClient: createClient,
     userId: user.id,
     initialPage,
     initialLoadFailed,
     onSessionExpired: handleSessionExpired,
+    onIncoming: autoCopy.handleIncoming,
   });
+
+  // "Copy code" / "Copy message" chosen on a notification.
+  useNotificationIntents(sync.messages);
 
   const loadFailed = sync.loadFailed;
   const messages = filterActive(sync.messages, now);
@@ -117,7 +126,10 @@ export function MessagesApp({ user, initialPage, initialLoadFailed }: MessagesAp
           online={online}
           onSent={(message) => sync.addMessages([message])}
           onUnauthorized={handleSessionExpired}
+          onSending={autoCopy.markSent}
         />
+
+        <NotificationPrompt onUnauthorized={handleSessionExpired} />
 
         <section aria-labelledby="recent-heading" className="space-y-3">
           <div className="flex min-h-10 items-center justify-between gap-2">

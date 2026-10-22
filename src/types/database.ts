@@ -59,6 +59,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      push_subscriptions: {
+        Row: {
+          auth: string;
+          created_at: string;
+          endpoint: string;
+          id: string;
+          p256dh: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          auth: string;
+          created_at?: string;
+          endpoint: string;
+          id?: string;
+          p256dh: string;
+          user_id?: string;
+        };
+        Update: {
+          auth?: string;
+          created_at?: string;
+          endpoint?: string;
+          id?: string;
+          p256dh?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -67,6 +95,10 @@ export type Database = {
       purge_expired_messages: {
         Args: Record<PropertyKey, never>;
         Returns: number;
+      };
+      register_push_subscription: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string };
+        Returns: string;
       };
     };
     Enums: {

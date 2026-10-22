@@ -6,6 +6,17 @@ import { callsOf, createFakeSupabase, type QueryResult } from "./fake-supabase";
 const getAuthContext = vi.fn();
 vi.mock("@/features/auth/dal", () => ({ getAuthContext: () => getAuthContext() }));
 
+// `after()` needs a request scope; collect the callbacks so tests can run them.
+const afterCallbacks: Array<() => unknown> = [];
+vi.mock("next/server", () => ({
+  after: (callback: () => unknown) => afterCallbacks.push(callback),
+}));
+
+const notifyNewMessage = vi.fn();
+vi.mock("@/features/notifications/send", () => ({
+  notifyNewMessage: (options: unknown) => notifyNewMessage(options),
+}));
+
 const { clearMessages, createMessage, deleteMessage } = await import("@/features/messages/actions");
 
 const USER = { id: "11111111-1111-4111-8111-111111111111", email: "me@example.com" };
@@ -27,6 +38,8 @@ function signedIn(results: QueryResult[]) {
 
 beforeEach(() => {
   getAuthContext.mockReset();
+  notifyNewMessage.mockReset();
+  afterCallbacks.length = 0;
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -72,11 +85,39 @@ describe("createMessage", () => {
     });
   });
 
+  it("notifies the user's other devices after responding, excluding the sender", async () => {
+    const fake = signedIn([{ data: storedMessage }]);
+    const sourceEndpoint = "https://fcm.googleapis.com/fcm/send/this-device";
+    await createMessage({ clientId: CLIENT_ID, content: storedMessage.content, sourceEndpoint });
+
+    expect(notifyNewMessage).not.toHaveBeenCalled(); // Not before the response.
+    expect(afterCallbacks).toHaveLength(1);
+    await afterCallbacks[0]();
+    expect(notifyNewMessage).toHaveBeenCalledWith({
+      supabase: fake.client,
+      userId: USER.id,
+      message: storedMessage,
+      sourceEndpoint,
+    });
+  });
+
+  it("ignores a malformed source endpoint instead of rejecting the message", async () => {
+    signedIn([{ data: storedMessage }]);
+    const result = await createMessage({
+      clientId: CLIENT_ID,
+      content: storedMessage.content,
+      sourceEndpoint: 42,
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it("returns the original message when a retry hits the idempotency key", async () => {
     const fake = signedIn([{ error: { code: "23505" } }, { data: storedMessage }]);
     const result = await createMessage({ clientId: CLIENT_ID, content: storedMessage.content });
 
     expect(result).toEqual({ ok: true, data: storedMessage });
+    // The first attempt already notified; a retry must not notify again.
+    expect(afterCallbacks).toHaveLength(0);
     expect(fake.queries).toHaveLength(2);
     expect(callsOf(fake.queries[1], "eq")).toEqual([
       ["user_id", USER.id],

@@ -30,6 +30,11 @@ export type UseMessageSyncOptions = {
   initialLoadFailed?: boolean;
   /** Called when the session can no longer be used (signed out or expired). */
   onSessionExpired: () => void;
+  /**
+   * Called for each message that arrives live over Realtime (not for refetches), with
+   * the idempotency key it was sent with, so the caller can tell its own sends apart.
+   */
+  onIncoming?: (message: Message, clientId: string | null) => void;
 };
 
 /**
@@ -48,6 +53,7 @@ export function useMessageSync({
   initialPage,
   initialLoadFailed = false,
   onSessionExpired,
+  onIncoming,
 }: UseMessageSyncOptions) {
   const [state, dispatch] = useReducer(messagesReducer, initialPage, (page) =>
     createInitialState(page.messages, page.hasMore),
@@ -63,10 +69,12 @@ export function useMessageSync({
   const arrivalsRef = useRef<Set<string> | null>(null);
   const resyncIdRef = useRef(0);
   const onSessionExpiredRef = useRef(onSessionExpired);
+  const onIncomingRef = useRef(onIncoming);
 
   useEffect(() => {
     onSessionExpiredRef.current = onSessionExpired;
-  }, [onSessionExpired]);
+    onIncomingRef.current = onIncoming;
+  }, [onSessionExpired, onIncoming]);
 
   const addMessages = useCallback((messages: Message[]) => {
     messages.forEach((message) => arrivalsRef.current?.add(message.id));
@@ -178,7 +186,10 @@ export function useMessageSync({
           },
           (payload) => {
             const message = toMessage(payload.new);
-            if (message) addMessages([message]);
+            if (!message) return;
+            addMessages([message]);
+            const clientId = (payload.new as { client_id?: unknown }).client_id;
+            onIncomingRef.current?.(message, typeof clientId === "string" ? clientId : null);
           },
         )
         .on(

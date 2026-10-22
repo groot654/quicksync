@@ -79,3 +79,22 @@ with the installed home-screen app.
 - [ ] Signing up through the API (`supabase.auth.signUp`) is refused.
 - [ ] The Network tab shows no message text in any URL.
 - [ ] DevTools → Application: Local Storage and Session Storage contain no message text, and Cache Storage contains only `/_next/static`, icons and `offline.html`.
+- [ ] Local Storage holds only `quicksync:auto-copy-codes` and `quicksync:notification-prompt-dismissed` flags. A notification-opened URL contains only `notification=<action>&message=<id>`, and the app removes it right away.
+
+## 10. Notifications
+
+Needs the deployed HTTPS site with the three VAPID variables set.
+
+- [ ] Android (installed app): tap **Turn on notifications**, allow. The card disappears and the ⚙ menu shows **Turn off notifications**.
+- [ ] iPhone in Safari (not installed): the card asks to add QuickSync to the Home Screen. From the Home Screen app, turning on works.
+- [ ] With QuickSync closed on Android, send "Your verification code is 482913" from the iPhone. The notification title is **Code 482 913** with **Copy code** and **Copy message** buttons.
+- [ ] **Copy code** opens QuickSync and shows "Code 482913 copied"; pasting anywhere gives `482913`. Gboard offers it as a clipboard suggestion.
+- [ ] **Copy message** copies the full text.
+- [ ] Sending a plain link gives a "New message" notification with one **Copy** button.
+- [ ] The sending phone gets no notification for its own message.
+- [ ] With QuickSync open and in front on the receiving phone, no notification appears; the message arrives live, and with **Auto-copy codes** on, its code is copied ("Code … copied").
+- [ ] iPhone (Home Screen app, closed): send a code from Android. Tap the notification: QuickSync opens with a **Copy code** button in a toast, and tapping it copies the code.
+- [ ] Turning **Auto-copy codes** off: tapping a code notification only opens the app; the **Copy code** action still copies.
+- [ ] Opening QuickSync clears its notifications that are still showing.
+- [ ] **Turn off notifications** on one phone: it gets no further notifications, the other phone still does.
+- [ ] Sign out on a phone: it gets no further notifications for that account.

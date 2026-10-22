@@ -17,6 +17,29 @@ export async function copyText(text: string): Promise<boolean> {
   return legacyCopy(text);
 }
 
+/**
+ * Copies text without a tap in the page, for example right after a notification
+ * action opened the app. Chromium allows this once the page has focus, so it waits
+ * briefly for focus first. Safari requires a tap and will report `false`; callers should
+ * then offer a button.
+ */
+export async function copyTextWhenFocused(text: string, timeoutMs = 3_000): Promise<boolean> {
+  if (typeof document === "undefined") return false;
+  if (!document.hasFocus()) {
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        window.removeEventListener("focus", done);
+        resolve();
+      };
+      const timer = setTimeout(done, timeoutMs);
+      window.addEventListener("focus", done);
+    });
+  }
+  if (!document.hasFocus()) return false;
+  return copyText(text);
+}
+
 function legacyCopy(text: string): boolean {
   if (typeof document === "undefined") return false;
 
